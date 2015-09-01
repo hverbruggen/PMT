@@ -1,14 +1,15 @@
 #!/usr/bin/perl
 
-my $version = 1.01;
+my $version = 1.02;
 
-#	PMT.pl     version 1.01
+#	PMT.pl     version 1.02
 #
 #   heroen.verbruggen@gmail.com
 #
-# 
+#
 #   Version history:
 #   1.01  initial release
+#   1.02  uses FastTree to build guide tree instead of phyml
 
 use strict;
 use warnings;
@@ -21,7 +22,7 @@ my (
 	$outfile,
 	$tflink,
 	$n2tflink,
-	$phymllink,
+	$fasttree_link,
 	$nchar,
 	$PMTstrategies,
 	$system,
@@ -92,14 +93,14 @@ if (defined $guide_tree) {unless (-e $guide_tree) {die "\n#### FATAL ERROR ####\
 if ($runmode == 2) {$defaults->{'test_for_previous_run'} = 0}
 
 sub usage {
-	print "\nusage:\n"; 
+	print "\nusage:\n";
 	print "\nmandatory parameters\n";
 	print "   -i  input alignment (nexus format)\n";
 	print "\noptional parameters\n";
 	print "   -o  output file (plain text)\n";
 	print "         default: ",$defaults->{'outfile'},"\n";
 	print "   -g  guide tree (newick format)\n";
-	print "         if unspecified, will run PhyML with HKY+IG4 to get one\n";
+	print "         if unspecified, will run FastTree to get one\n";
 	print "   -s  substitution models\n";
 	print "         comma-separated list of substitution models\n";
 	print "         default: ",$defaults->{'substmodels'},"\n";
@@ -144,7 +145,7 @@ print "   RAS types     $RAStypes\n";
 	} else {
 		open FH,$tempfile; $tflink = <FH>; $tflink =~ s/[\r\n]//g;
 		if (-e $tflink) {
-			print "   $tflink - okay\n";
+			print "   $tflink -- found\n";
 		} else {
 			die "\n#### FATAL ERROR ####\nTreeFinder must be installed, be in the path, and be reachable with 'tf' command\n"
 		}
@@ -155,21 +156,21 @@ print "   RAS types     $RAStypes\n";
 	} else {
 		open FH,$tempfile; $n2tflink = <FH>; $n2tflink =~ s/[\r\n]//g;
 		if (-e $n2tflink) {
-			print "   $n2tflink -- okay\n";
+			print "   $n2tflink -- found\n";
 		} else {
 			die "\n#### FATAL ERROR ####\nnex2treefinder.pl must be installed, be in the path, and be reachable with 'nex2treefinder.pl' command\n"
 		}
 	}
 	unless (defined $guide_tree) {
-		$a = system("which phyml > $tempfile");
+		$a = system("which fasttree > $tempfile");
 		if ($a eq '256') {
-			die "\n#### FATAL ERROR ####\nPhyML 3.0 must be installed, be in the path, and be reachable with 'phyml' command\n"
+			die "\n#### FATAL ERROR ####\nFastTree must be installed, be in the path, and be reachable with 'fasttree' command\n"
 		} else {
-			open FH,$tempfile; $phymllink = <FH>; $phymllink =~ s/[\r\n]//g;
-			if (-e $phymllink) {
-				print "   $phymllink -- okay\n";
+			open FH,$tempfile; $fasttree_link = <FH>; $fasttree_link =~ s/[\r\n]//g;
+			if (-e $fasttree_link) {
+				print "   $fasttree_link -- found\n";
 			} else {
-				die "\n#### FATAL ERROR ####\nPhyML 3.0 must be installed, be in the path, and be reachable with 'phyml' command\n"
+				die "\n#### FATAL ERROR ####\nFastTree must be installed, be in the path, and be reachable with 'fasttree' command\n"
 			}
 		}
 	}
@@ -180,31 +181,32 @@ print "   RAS types     $RAStypes\n";
 ### inferring guide tree ###############################################################################################################################
 
 unless (defined $guide_tree) {
-	print "\ninferring guide tree with PhyML\n";
+	print "\ninferring guide tree with FastTree\n";
 	$guide_tree = $defaults->{'guide_tree'};
-	print "   converting alignment to relaxed phylip format\n";
+	print "   converting alignment to fasta format\n";
 	my ($seq_order,$seqs) = read_nexus_data($infile);
 	my $aln = 'temp'.randdig(10);
 	open FH,">$aln";
 	my @keys = keys %$seqs;
-	print FH scalar(@keys)," ",length($seqs->{$keys[0]}),"\n";
 	my $ml; $ml = 0; foreach my $sn (@$seq_order) {if (length $sn > $ml) {$ml = length $sn}}
 	for (my $i = 0; $i < scalar(@$seq_order); ++$i) {
 		my $seqname = $seq_order->[$i];
 		my $seq = $seqs->{$seqname};
-		print FH $seqname,spaces($ml + 2 - length($seqname)),$seq,"\n";
+		print FH ">",$seqname,"\n",$seq,"\n";
 	}
 	close FH;
-	print "   running phyml -- please be patient...\n";
-	my $c = "$phymllink -i $aln -n 1 -p -f e -m HKY -t e -v e -a e";
-	system($c."> deleteme");
-	system("rm deleteme");
+	print "   running FastTree -- please be patient...\n";
+	my $c = "$fasttree_link -nosupport $aln > $guide_tree";
+	print "   command: $c\n";
+	system($c." 2> deleteme");
 	system("rm $aln");
-	system("rm $aln\_phyml_stats.txt");
-	system("mv $aln\_phyml_tree.txt $guide_tree");
-	print "   guide tree inferred: $guide_tree\n";
+	if (-e $guide_tree) {
+		print "   guide tree inferred: $guide_tree\n"; system("rm deleteme");
+	} else {
+		print "ERROR -- inference of guide tree appears to have failed\nPlease check your alignment and whether you can identify the problem in the screen output of FastTree (file called \"deleteme\")\n";
+		exit;
+	}
 }
-
 
 ### parsing input nexus file ###############################################################################################################################
 
