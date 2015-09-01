@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 
-my $version = 1.02;
+my $version = 1.03;
 
-#	PMT.pl     version 1.02
+#	PMT.pl     version 1.03
 #
 #   heroen.verbruggen@gmail.com
 #
@@ -10,6 +10,7 @@ my $version = 1.02;
 #   Version history:
 #   1.01  initial release
 #   1.02  uses FastTree to build guide tree instead of phyml
+#   1.03  checks for non-standard characters in taxon names
 
 use strict;
 use warnings;
@@ -63,6 +64,8 @@ my $recognized = {
 		'GTR' => 1,
 	},
 };
+
+print "\nPMT.pl - version $version\n";
 
 ### parsing command line arguments ###############################################################################################################################
 
@@ -123,7 +126,6 @@ sub usage {
 
 ### printing list of options ###############################################################################################################################
 
-print "\nPMT.pl - version $version\n";
 print "\nlist of options used\n";
 print "   input file    $infile\n";
 print "   output file   $outfile\n";
@@ -175,6 +177,25 @@ print "   RAS types     $RAStypes\n";
 		}
 	}
 	system("rm $tempfile");
+}
+
+
+### check for non-standard characters in taxon names ###############################################################################################################################
+
+print "\nchecking taxon names for non-standard characters\n";
+my ($seq_order,$seqs) = read_nexus_data($infile);
+my $die = 0;
+foreach my $sn (@$seq_order) {
+	unless ($sn =~ /^[0-9a-zA-Z\_]+$/) {
+		print "ERROR -- unallowed character in taxon name $sn -- only digits, a-z, A-Z and _ characters allowed\n";
+		$die = 1;
+	}
+}
+if ($die) {
+		print "\n#### FATAL ERROR ####\n";
+		print "Execution of PMT.pl has been terminated. Please fix the errors listed above and try again\n";
+		print "Note that if you have a pre-made guide tree, you need to update the taxon names in there as well\n";
+		exit;
 }
 
 
